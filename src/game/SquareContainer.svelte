@@ -3,11 +3,12 @@
   import { onMount } from "svelte";
   import { config } from "../lib/config";
   import { setupCanvas, clear, drawTriangel, drawByCells, drawPoint, getFieldCoordinateFromEvent, type FieldCoordinate, cellsEquality, drawForbiddenPoint } from "./CanvasMethods";
-  import { checkForbiddenCellsNotInTriangelFromCells, clearTargetCells, generateCells, GenerateForbiddenCells, GetForbiddenCells, GetMaxSquare, getSquareFromCoordinates, GetTargetCells, type Cells } from "./MathMethods";
+  import { checkForbiddenCellsNotInTriangelFromCells, clearTargetCells, generateCells, GenerateForbiddenCells, GetForbiddenCells, GetMaxSquare, getSquareFromCoordinates, GetTargetCells, type Cells, formatDailyDate, getDailyPuzzleCode } from "./MathMethods";
   import { encodePoints } from "./Сoding";
   import { getQuery, setQuery } from "../lib/queryParams";
   import { copyText, getCurrentUrl, isMouseEvent } from "../lib/utils";
   import { isMobile } from "../stores/isMobile";
+  import { dailyPuzzle, setDailyPuzzle, clearDailyPuzzle } from "../stores/dailyPuzzle";
 
   let canvas:HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null
@@ -41,13 +42,15 @@
       return;
     };
     const key = getQuery("k");
-    const code = Start(key);
+    const useDaily = !key; // Use daily seed only if no key provided
+    const code = Start(key, useDaily);
     setQuery("k", code);
   });
-  function Start(key?:string|null|undefined){
+  function Start(key?:string|null|undefined, useDailySeed: boolean = false){
     clear(canvas)
     cells = generateCells();
-    cells = GenerateForbiddenCells(cells, 16, key);
+    
+    cells = GenerateForbiddenCells(cells, 16, key, useDailySeed);
     const ForbiddenCells = GetForbiddenCells(cells);
       for (let ForbiddenCell of ForbiddenCells){
       const x = ForbiddenCell.x
@@ -56,6 +59,15 @@
       ForbiddenCell.y = x
     }
     const code = encodePoints(ForbiddenCells);
+    
+    // Check if this is today's daily puzzle by comparing codes
+    const expectedDailyCode = getDailyPuzzleCode();
+    if (code === expectedDailyCode) {
+      setDailyPuzzle(formatDailyDate());
+    } else {
+      clearDailyPuzzle();
+    }
+    
     handleSquare(0);
     MaxSquare = GetMaxSquare(cells);
     handleMaxSquare(MaxSquare);
@@ -67,7 +79,10 @@
     resetToken;
     clear(canvas);
     const key = getQuery("k");
-    const code = Start(key);
+    // For reset, check if current puzzle is daily by comparing with expected code
+    const expectedDailyCode = getDailyPuzzleCode();
+    const isDaily = key === expectedDailyCode;
+    const code = Start(key, isDaily);
     // setQuery("k", code);
     handleSquare(0)
     cells = clearTargetCells(cells);
@@ -81,7 +96,7 @@
   });
   $effect(() => {
     if (!ctx || !newToken) return;
-    const code = Start();
+    const code = Start(undefined, false); // Random puzzle on "New" button
     setQuery("k", code);
   });
 function handleCanvasClick(event:MouseEvent, canvas:HTMLCanvasElement, cells:Cells){

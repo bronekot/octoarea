@@ -2,6 +2,47 @@ import type { FieldCoordinate } from "./CanvasMethods"
 import { encodePoints, decodePoints } from "./Сoding";
 import { config } from "../lib/config";
 export type Cells=String[][]
+
+// Seeded random generator (mulberry32)
+let seed: number | null = null;
+
+export function setSeed(newSeed: number): void {
+  seed = newSeed;
+}
+
+export function clearSeed(): void {
+  seed = null;
+}
+
+function mulberry32(a: number): number {
+  let t = a += 0x6D2B79F5;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+export function RandomNumber(start: number, end: number): number {
+  const from = Math.min(start, end);
+  const to = Math.max(start, end);
+  const random = seed !== null ? mulberry32(seed++) : Math.random();
+  return from + Math.floor(random * (to - from + 1));
+}
+
+// Get daily seed based on UTC date (YYYYMMDD)
+export function getDailySeed(): number {
+  const now = new Date();
+  const utcDate = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.floor(utcDate / 86400000); // Convert to days since epoch
+}
+
+// Format date for display
+export function formatDailyDate(): string {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(now.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 export function generateCells():Cells{
   let cells: Cells = [];
   for (let i = 0; i<config.fieldHeight;i++){
@@ -40,13 +81,8 @@ export function getSquareFromCoordinates(coord1: FieldCoordinate, coord2: FieldC
   ans = Math.abs(coord1.x*(coord2.y-coord3.y)+coord2.x*(coord3.y-coord1.y)+coord3.x*(coord1.y-coord2.y))/2
   return ans
 }
-export function RandomNumber(start:number, end:number):number{
-  const from = Math.min(start, end);
-  const to = Math.max(start, end);
-  return from + Math.floor(Math.random() * (to - from + 1));
-}
 
-export function GenerateForbiddenCells(cells: Cells, quantity:number, key:string|null|undefined): Cells{
+export function GenerateForbiddenCells(cells: Cells, quantity:number, key:string|null|undefined, useDailySeed: boolean = false): Cells{
   if (key){
     let arr = decodePoints(key)
     if (!arr){return GenerateForbiddenCells(cells, quantity, "")}
@@ -54,6 +90,11 @@ export function GenerateForbiddenCells(cells: Cells, quantity:number, key:string
       cells[f.x][f.y] = '-1'
     }
   } else {
+    // Set daily seed if requested
+    if (useDailySeed) {
+      setSeed(getDailySeed());
+    }
+    
     let arr:FieldCoordinate[]=[]
     for (let i=0; i<quantity; i++){
       const x = RandomNumber(0, 15)
@@ -61,12 +102,42 @@ export function GenerateForbiddenCells(cells: Cells, quantity:number, key:string
       cells[x][y] = "-1"
       arr.push({x:x, y:y})
     }
+    
+    // Clear seed after generation
+    clearSeed();
+    
     // console.log(encodePoints(arr))
     if (arr.length !=16){
-      return GenerateForbiddenCells(cells, quantity, key)
+      return GenerateForbiddenCells(cells, quantity, key, useDailySeed)
     }
   }
   return cells
+}
+
+// Generate today's daily puzzle code for comparison
+export function getDailyPuzzleCode(): string {
+  const cells = generateCells();
+  setSeed(getDailySeed());
+  
+  for (let i = 0; i < 16; i++) {
+    const x = RandomNumber(0, 15);
+    const y = RandomNumber(0, 15);
+    cells[x][y] = "-1";
+  }
+  
+  clearSeed();
+  
+  // Get forbidden cells in the same order as Start function
+  const ForbiddenCells = GetForbiddenCells(cells);
+  
+  // Swap coordinates (as done in Start function)
+  for (let f of ForbiddenCells) {
+    const tempX = f.x;
+    f.x = f.y;
+    f.y = tempX;
+  }
+  
+  return encodePoints(ForbiddenCells);
 }
 function checkForbiddenCellNotInTriangel( ForbiddenCell:FieldCoordinate, 
                                           TargetCell1: FieldCoordinate, 
