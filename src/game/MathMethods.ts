@@ -77,9 +77,12 @@ export function GetForbiddenCells(cells:Cells){
   return ForbiddenCells;
 };
 export function getSquareFromCoordinates(coord1: FieldCoordinate, coord2: FieldCoordinate, coord3: FieldCoordinate):number{
-  let ans:number;
-  ans = Math.abs(coord1.x*(coord2.y-coord3.y)+coord2.x*(coord3.y-coord1.y)+coord3.x*(coord1.y-coord2.y))/2
-  return ans
+  const points = [coord1, coord2, coord3].sort((a, b) => {
+    if (a.x !== b.x) return a.x - b.x;
+    return a.y - b.y;
+  });
+  const [p1, p2, p3] = points;
+  return Math.abs(p1.x*(p2.y-p3.y)+p2.x*(p3.y-p1.y)+p3.x*(p1.y-p2.y))/2
 }
 
 export function GenerateForbiddenCells(cells: Cells, quantity:number, key:string|null|undefined, useDailySeed: boolean = false): Cells{
